@@ -43,8 +43,14 @@ The data used in this study are available from the following sources:
 │   ├── pub-data-processing.R       # Process public dataset (merge, annotate, subset)
 │   ├── SingcellAnalysis-packages_install.R  # One-shot package installation
 │   └── README.md
-├── SCAP-prediction/                # SCAP prediction models
-│   └── ...
+├── SCAP-prediction/                # Genotype-panel screening & SCAP prediction models ★
+│   ├── convert_to_onehot.py        # Genotype table (-1/0/1/2) → one-hot features
+│   ├── lasso_selection_glmnet.R    # LASSO (glmnet, lambda.1se) feature screening + figures
+│   ├── split_train_test.py         # Stratified 80/20 train/test split
+│   ├── consensus_feature_selection.py  # RF / SVM-RFE / XGBoost+SHAP consensus screening
+│   ├── train_final_model.py        # Final XGBoost + logistic-regression panel (ROC / calibration / DCA / nomogram / SHAP)
+│   ├── predict_new_samples.py      # Inference on new patients from saved model assets
+│   └── plot_confusion_corr.py      # Confusion matrix & feature-correlation heatmaps
 ├── LPCAT-Machine_Learning/         # DNN classification on clinical data ★
 │   ├── data/                       # Example CSV datasets (full data archived at Peking University)
 │   ├── models/                     # Saved Keras models (auto-generated)
@@ -318,11 +324,60 @@ source("pub-data-processing.R")
 - `Dataset Modification.R` assumes a one-to-one cell-type mapping between your own and public datasets. Adjust the `recode` mappings if the ontologies differ.
 - SingleR annotation in `pub-data-processing.R` uses multiple references in cascade; change the reference list in the script to suit your tissue or species.
 
-### 3. SCAP-prediction — SCAP Prediction
+### 3. SCAP-prediction — Genotype-Panel Screening & Prediction ★
 
-- SCAP prediction models and related analyses
+Python / R scripts for building the SCAP genotype prediction panel: one-hot encoding of the cohort genotype table, LASSO dimensionality reduction, multi-model consensus feature screening (Random Forest / SVM-RFE / XGBoost + SHAP), final dual-model construction (XGBoost for discrimination, multivariable logistic regression for clinical interpretability and nomogram), held-out test evaluation (ROC / calibration / decision curve analysis / SHAP), and single-sample inference.
 
-*Detailed documentation forthcoming.*
+The panel is derived from the WGS variant table (T2T-YAO coordinates): each locus is coded 0 = wild type, 1 = heterozygous, 2 = homozygous, −1 = unknown, and expanded into binary indicator columns so penalised models see mutually exclusive dummies rather than an ordinal coding.
+
+Scripts were executed under WSL Ubuntu 22.04 (conda Python 3.12) and Windows 11 (R 4.4.2). Paths in the released scripts have been replaced with placeholders (`/path/to/scap_genotype/...`) — edit the user-configurable section at the top of each script before running.
+
+#### Dependencies
+
+| Tool / Package | Version (used) | Purpose                                          |
+|----------------|----------------|--------------------------------------------------|
+| Python         | 3.12 (WSL Ubuntu 22.04, conda) | Runtime for the modelling scripts   |
+| pandas / numpy | —              | Table & matrix manipulation                      |
+| scikit-learn   | —              | Logistic regression, RF, SVM-RFE, scaling, metrics |
+| xgboost        | —              | Gradient-boosted trees (screening + final model) |
+| shap           | —              | SHAP values (feature importance, beeswarm plots) |
+| statsmodels    | —              | Logistic regression with coefficient p-values (nomogram input) |
+| matplotlib (+ matplotlib-venn, seaborn) | — | Vector PDF figures, Venn diagram, heatmaps |
+| joblib         | —              | Model-asset serialisation                        |
+| R              | 4.4.2 (Windows) | LASSO screening runtime                         |
+| glmnet / ggplot2 / dplyr | —     | LASSO (L1) logistic regression + figures         |
+
+#### Directory Layout & Scripts
+
+- **`convert_to_onehot.py`** — convert the genotype table (ID, SCAP label, one column per locus coded −1/0/1/2) into one-hot indicator columns (`YAO001_0`, `YAO001_1`, …); genotype values are cast to strings first so pandas treats them as four independent categories, not ordinal numbers.
+- **`lasso_selection_glmnet.R`** — LASSO (L1-penalised logistic) feature screening with `glmnet`: 10-fold CV (`type.measure = "auc"`), features extracted at `lambda.1se` (the most parsimonious model within one SE of the optimum — preferred for clinical feature screening over `lambda.min`). Exports three vector PDFs (coefficient path, CV curve, non-zero weights with risk/protective colouring), the weight table, and the reduced dataset (`Final_Data_For_Python_XGBoost.csv`) for the downstream steps.
+- **`split_train_test.py`** — stratified 80/20 train/test split preserving the severe/non-severe ratio; the test set never participates in any feature screening or tuning.
+- **`consensus_feature_selection.py`** — three screening models run in parallel threads on the training set only: Random Forest (Gini importance), SVM-RFE (linear-kernel recursive elimination, on standardised features), XGBoost + SHAP (mean |SHAP|). Produces full per-model rankings, a SHAP summary figure and a Venn diagram of the Top-K sets, then exports train/test subsets for several consensus sets. `selection_mode`:
+  - `"pairwise"` (main pipeline) — three pairwise intersections, the strict 3-model intersection, and the **union of pairwise intersections** (features selected by ≥ 2 models); the final model is trained on `Train/Test_Subset_Union_of_Pairs.csv`;
+  - `"topk_union"` (sensitivity analysis) — union of the three Top-K lists (top 20/25/30/35 …), used to probe panel-size sensitivity.
+- **`train_final_model.py`** — final panel construction and evaluation: XGBoost (raw 0/1 features) for maximum discrimination + multivariable logistic regression (statsmodels on raw features for nomogram coefficients/p-values; sklearn on standardised features for prediction). Evaluates AUC, Brier score and the Youden-optimal cut-off (sensitivity / specificity / PPV / NPV) on the held-out test set; exports ROC curve, calibration curves, DCA (net benefit computed manually — no external DCA package), the **clinical nomogram** (per-locus points scaled so the largest |coefficient| = 100 points; total points → SCAP probability via the log-odds transform with the fitted intercept) plus a text version of the score system, a SHAP beeswarm plot, and all fitted objects to `Final_SCAP_Model_Assets.pkl`. Optional `remove_collinear = True` drops zero-variance and |r| > 0.95 features before modelling (used in the all-LASSO-features sensitivity analysis to avoid a singular design matrix).
+- **`predict_new_samples.py`** — single/batch inference from the saved assets; validates that all panel loci are present and applies the correct preprocessing per model (XGBoost on raw features, logistic regression through the stored scaler).
+- **`plot_confusion_corr.py`** — supplementary evaluation from the saved assets: confusion-matrix heatmap on the test set and a feature-correlation heatmap (top-20 features by XGBoost importance) to check residual collinearity.
+
+#### Typical Workflow
+
+1. **Encode** — `convert_to_onehot.py`: genotype table → one-hot feature matrix.
+2. **Screen (LASSO)** — `lasso_selection_glmnet.R`: p >> n dimensionality reduction at `lambda.1se` → `Final_Data_For_Python_XGBoost.csv`.
+3. **Split** — `split_train_test.py`: stratified 80/20 split.
+4. **Screen (consensus)** — `consensus_feature_selection.py` (`selection_mode = "pairwise"`, `top_k = 20`): three-model ranking + Venn + consensus subsets (train aligned, test only aligned).
+5. **Model & evaluate** — `train_final_model.py` on `Train/Test_Subset_Union_of_Pairs.csv`: XGBoost + logistic regression, ROC / calibration / DCA / nomogram / SHAP, model assets saved.
+6. **Infer** — `predict_new_samples.py` with `Final_SCAP_Model_Assets.pkl` and a new-patient CSV; optionally `plot_confusion_corr.py` for supplementary plots.
+
+#### Technical Notes
+
+- **Why LASSO first** — one-hot expansion makes p far exceed n; unpenalised regression then suffers from multicollinearity (LD between neighbouring loci) and overfitting. The L1 penalty yields a sparse solution, doing variable selection and parameter estimation simultaneously.
+- **Test-set isolation** — the held-out test set is never used for feature ranking or hyperparameter choice; it enters only the final evaluation, with its columns aligned to whatever subset the training pipeline selects.
+- **Scaling convention (important for inference)** — XGBoost is fitted on the **raw** 0/1 features, the sklearn logistic regression on **standardised** features (the fitted `StandardScaler` is stored in the assets); `predict_new_samples.py` applies each preprocessing path to the right model. Mixing them up silently degrades the logistic predictions.
+- **Nomogram maths** — points per locus = coefficient × (100 / max |coefficient|); a total-points target for probability p is `(logit(p) − intercept) × scaling`. The probability axis shares the physical extent of the total-points axis, so the two must stay strictly aligned.
+- **DCA without a DCA library** — net benefit is computed directly from the confusion matrix at each threshold (`NB = TP/N − FP/N × t/(1−t)`) with treat-all / treat-none reference curves; no external package needed.
+- **Sensitivity analyses covered by parameters** — Top-K union screening (`selection_mode = "topk_union"`) and collinearity wash-out before modelling (`remove_collinear = True`, |r| > 0.95 plus zero-variance removal) reproduce the panel-size and all-LASSO-features variants of the study without separate scripts.
+- **Percentage formatting fix** — the working notes printed Youden-cut-off sensitivity/specificity as fractions with a "%" suffix; the released script multiplies by 100 before formatting.
+- **statsmodels optimiser** — BFGS with an lbfgs fallback is used for the nomogram logistic fit; if both struggle on an ill-conditioned design matrix, enable `remove_collinear = True` first.
 
 ### 4. LPCAT-Machine Learning — DNN Classification ★
 
