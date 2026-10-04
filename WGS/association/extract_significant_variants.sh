@@ -34,8 +34,9 @@ awk 'BEGIN {FS="[ \t]+"; OFS="\t"} {print $1, $2, $3, $4}' "$input_bed" | awk 'N
 echo "Cleaned BED file -> $final_bed"
 
 # === Step 4: extract variants from the annotated VCF ========================
+# -Oz so the .vcf.gz output is actually bgzip-compressed (tabix/bcftools need it)
 bcftools view -R BED/final_cleaned_all-hg38-fil.bed \
     /path/to/snpeff_anno/all-hg38-GATK-fil-snpeff-cleaned.vcf.gz \
-    -o /path/to/P005.vcf/all-hg38-GATK-fil-snpeff_annoed.vcf.gz
+    -Oz -o /path/to/P005.vcf/all-hg38-GATK-fil-snpeff_annoed.vcf.gz
 
 echo "All files processed."

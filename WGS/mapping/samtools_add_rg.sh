@@ -5,7 +5,7 @@
 
 for name in CAP001   # sample to process — edit per run
 do
-    RG="@RG\tID:${name}\tSM:${name}\tLB:WES\tPL:ILLUMINA"
+    RG="@RG\tID:${name}\tSM:${name}\tLB:WGS\tPL:ILLUMINA"
 
     input_hg38="/path/to/project/BMA/HG38/${name}.bam"
     output_hg38="/path/to/project/BMA/HG38/${name}-hg38.bam"

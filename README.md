@@ -8,14 +8,15 @@ This repository contains the data analysis code used in the bioinformatics secti
 
 The scripts and related files in this repository are associated with the data analysis part of my thesis project. They are intended to document the computational workflow, improve reproducibility, and provide a public record of the analyses performed during the study.
 
-Please note that this repository is currently under organization. I will continue to clean, annotate, and upload the relevant scripts over the coming period.
+The repository is essentially complete. Only minor maintenance updates (typo fixes, small wording or documentation clarifications) are expected from here on.
 
 ## Data Availability
 
 The data used in this study are available from the following sources:
 
 - Part of the original data has been submitted to the university archives.
-- **Note:** Data files in this repository (under `data/`) are example datasets only. The complete clinical data are archived at Peking University and are not publicly included here.
+- **Note:** Data files in this repository (under `data/`) fall into two categories. The clinical example tables (`LPCAT-Machine-Learning/data/`) are synthetic / randomly sampled examples that only document the column layout: each row was assembled by independently drawing single values from the full cohort dataset, so the fields on one row (age, sex, BMI, laboratory values, outcome) do **not** belong to the same patient in the real world. The WGS figure tables (`WGS/figures/data/`) use anonymised placeholder sample IDs and deliberately disclose the **same aggregate per-sample QC statistics as reported in the thesis** — a safe choice, since these per-sample aggregates carry no individual-level genomic or clinical information. The complete clinical data are archived at Peking University and are not publicly included here.
+- The LPCAT clinical cohort and the WGS cohort are two entirely separate study cohorts with **no overlapping patients**. Even where identifiers look similar or share the same numbering (e.g. `num` 1–20 in the clinical table vs `CAP001`–`CAP0xx` in the WGS tables), they do **not** refer to the same individual.
 - Public database data were obtained from: `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM5102902`.
 - Single-cell sequencing data have been uploaded to GEO database: `GSE262512`.
 - Whole-genome sequencing data have been archived at Peking University and are available through the university's data access procedures.
@@ -32,7 +33,14 @@ The data used in this study are available from the following sources:
 │   ├── variant-comparison/         # Two-cohort variant comparison (chi-square / Fisher)
 │   ├── association/                # PLINK association analysis
 │   ├── visualization/              # Manhattan / QQ / circular plots, IGV inspection
-│   ├── figures/                    # Downstream thesis figure scripts (to be added)
+│   ├── figures/                    # Downstream thesis figure scripts
+│   │   ├── samtools_stats_extract.py    # samtools stats -> metric CSVs
+│   │   ├── box_line_plots.py            # box-line plots per metric (3 references)
+│   │   ├── difference_plots.py          # per-sample difference scatter plots
+│   │   ├── make_density_windows.py      # 1 Mb window position tables
+│   │   ├── chromosome_density_ideogram.R  # RIdeogram density + gene markers
+│   │   ├── upsetr_plot.R                # UpSet plots of variant/gene sets
+│   │   └── data/                        # example datasets (anonymised IDs)
 │   └── README.md
 ├── scRNA-seq/                      # Single-cell RNA sequencing analysis ★
 │   ├── data/                       # Input Seurat objects (.rds) and CSV expression tables
@@ -41,7 +49,7 @@ The data used in this study are available from the following sources:
 │   ├── Box-bar plotting.R          # Box–bar plots for selected genes across cell types
 │   ├── Dataset Modification.R      # Harmonise idents, reorder groups & produce dot/UMAP plots
 │   ├── pub-data-processing.R       # Process public dataset (merge, annotate, subset)
-│   ├── SingcellAnalysis-packages_install.R  # One-shot package installation
+│   ├── SingleCellAnalysis-packages_install.R  # One-shot package installation
 │   └── README.md
 ├── SCAP-prediction/                # Genotype-panel screening & SCAP prediction models ★
 │   ├── convert_to_onehot.py        # Genotype table (-1/0/1/2) → one-hot features
@@ -51,8 +59,8 @@ The data used in this study are available from the following sources:
 │   ├── train_final_model.py        # Final XGBoost + logistic-regression panel (ROC / calibration / DCA / nomogram / SHAP)
 │   ├── predict_new_samples.py      # Inference on new patients from saved model assets
 │   └── plot_confusion_corr.py      # Confusion matrix & feature-correlation heatmaps
-├── LPCAT-Machine_Learning/         # DNN classification on clinical data ★
-│   ├── data/                       # Example CSV datasets (full data archived at Peking University)
+├── LPCAT-Machine-Learning/         # DNN classification on clinical data ★
+│   ├── data/                       # Synthetic example CSV tables (see Data Availability)
 │   ├── models/                     # Saved Keras models (auto-generated)
 │   ├── results/roc/                # ROC curve output images
 │   ├── Machine_Learning.py         # Train a model from scratch
@@ -63,7 +71,7 @@ The data used in this study are available from the following sources:
 └── README.md
 ```
 
-The final structure may be adjusted as additional scripts are organized.
+The directory layout above reflects the final released structure.
 
 ---
 
@@ -142,11 +150,11 @@ Environment setup on the offline server: conda environments were built in a loca
 - **`annovar_build_db.sh`** — build custom ANNOVAR refGene databases from reference GFF3 + FASTA (gff3ToGenePred → GenePred; retrieve_seq_from_fasta.pl → transcript FASTA).
 - **`annovar_annotate.sh`** — ANNOVAR `table_annovar.pl` gene-based annotation of filtered VCFs; reference database inferred from the VCF file name.
 - **`fix_gff3_order.sh`** — re-sort a GFF3 by chromosome/start (tabix refuses unsorted GFF3); used for the T2T-CHM13 annotation.
-- **`fix_gff3_parent_refs.py`** — repair invalid `Parent` references in the raw T2T-YAO GFF3 (records kept as documentation of the repair attempt; the final YAO database was built from an AGAT-cleaned GFF3).
+- **`fix_gff3_parent_refs.py`** — repair invalid `Parent` references in a raw GFF3 (Parent-reference errors only; for transcript-structure errors use an AGAT-cleaned GFF3).
 
 **`variant-comparison/` — Case–Control Variant Comparison ★**
 
-- **`vcf_info_extraction_snpeff.py`** — compare two annotated cohort VCFs (NSCP vs SCAP, same reference) variant by variant: build a 2×2 contingency table from AC/AN allele counts (variants unique to one group included, missing group AC=0), run a chi-square test per variant and switch to Fisher's exact test when any observed count in the 2×2 table is < 5, all variants processed in parallel (ThreadPoolExecutor). Outputs a combined CSV, per-chromosome CSVs (primary chromosomes only), HIGH/MODERATE-impact CSVs with gene names parsed from the SnpEff ANN field, and two VCFs of group-unique variants.
+- **`vcf_info_extraction_snpeff.py`** — compare two annotated cohort VCFs (NSCP vs SCAP, same reference) variant by variant: build a 2×2 contingency table from AC/AN allele counts (variants unique to one group included, missing group AC=0), run a chi-square test per variant and switch to Fisher's exact test when any expected cell count is < 5, all variants processed in parallel (ThreadPoolExecutor). Outputs a combined CSV, per-chromosome CSVs (primary chromosomes only), HIGH/MODERATE-impact CSVs with gene names parsed from the SnpEff ANN field, and two VCFs of group-unique variants.
 - **`vcf_info_extraction_annovar.py`** — ANNOVAR counterpart; instead of impact tiers it extracts variants with exonic function changes (ExonicFunc.refGene) and amino-acid changes (AAChange.refGene) into dedicated CSVs.
 - **`vcf_info_extraction_vep.py`** — VEP counterpart; parses the CSQ field and additionally reports the MODIFIER impact tier in its own CSV.
 - **`count_significant_variants.sh`** — count rows with P < 0.05 in a comparison output CSV.
@@ -156,7 +164,7 @@ Environment setup on the offline server: conda environments were built in a loca
 
 - **`vcf_to_plink_bed.sh`** — prepare cohort VCFs for PLINK: keep biallelic SNPs only (`bcftools view -m2 -M2 -v snps`), merge NSCP + SCAP cohorts per reference (`bcftools merge`), convert to bed/bim/fam with `plink2 --make-bed` (sex supplied via `--psam`; chrX PAR boundaries via `--split-par`; `--allow-extra-chr` for hg38; `--vcf-half-call m` for DeepVariant VCFs).
 - **`csv_to_psam.py`** — convert a two-column sample/sex CSV into a PLINK2 `.psam` file.
-- **`bim_add_variant_id.py`** — assign each variant a unique deterministic ID (`chr:pos:REF:ALT`) by rewriting the .bim column 2, so association results are unambiguously addressable.
+- **`bim_add_variant_id.py`** — assign each variant a unique deterministic ID (`chr:pos:allele2:allele1`; note that PLINK's .bim does not guarantee allele 2 is the reference allele, so the last two fields read as "the two alleles at this locus") by rewriting the .bim column 2, so association results are unambiguously addressable.
 - **`plink_qc.sh`** — PLINK QC (`--mind 0.05 --geno 0.05 --maf 0.01 --hwe 1e-6`; thresholds relaxed to 0.60 for very-low-frequency variant sets — document the choice per dataset).
 - **`plink_assoc.sh`** — PLINK 1.9 case/control association (`--assoc` / `--logistic`, each with `--adjust` for Bonferroni / Holm / Sidak / FDR_BH / FDR_BY corrected P values), covering GATK- and DeepVariant-derived bed files, QC-filtered and unfiltered.
 - **`extract_significant_variants.sh`** — extract P < 0.05 variants from `.assoc` results → CSV → BED → pull the matching records out of the annotated VCF with `bcftools view -R`.
@@ -165,14 +173,30 @@ Environment setup on the offline server: conda environments were built in a loca
 **`visualization/` — Visualization & Manual Inspection**
 
 - **`manhattan_qq.R`** — Manhattan and QQ plots from PLINK `.assoc` results with qqman (cleans chromosome codes, removes PAR rows and invalid P values).
-- **`circular_manhattan.R`** — circular Manhattan plot with CMplot (≤ 1,000,000 variants — downsample larger result sets first).
+- **`circular_manhattan.R`** — circular Manhattan plot with CMplot (≤ 1,000,000 variants — downsample larger result sets first). Defaults to `data/circular_manhattan_example.csv`, a small synthetic example dataset (SNP / Chromosome / Position / P-value) so the script runs out of the box; the complete per-variant comparison table is archived at Peking University and is not distributed.
 - **`extract_chromosome_lengths.py`** — chromosome lengths from a reference FASTA into a CSV (input for karyoploteR / RIdeogram chromosome ideograms).
 - **`extract_gene_positions.py`** — look up candidate-gene coordinates across the three reference GFF3s into one wide CSV for cross-reference gene marking.
 - **`extract_regions_for_igv.sh`** — slice BAMs (`samtools view -L`) and the annotated VCF (`bcftools view -R`) around candidate sites, merge per cohort, for manual read-coverage / genotype inspection in IGV.
 
-**`figures/` — Downstream Thesis Figures (to be added)**
+**`figures/` — Downstream Thesis Figures ★**
 
-Reserved for the figure-generation scripts used to produce the final WGS figures of the thesis (cohort comparison summaries, per-chromosome statistics, combined multi-panel figures). Scripts will be uploaded as the repository is updated.
+Scripts behind the final WGS figures of the thesis, comparing alignment /
+QC metrics and variant statistics across the three reference genomes
+(T2T-CHM13 / GRCh38 / T2T-YAO). The input tables under
+`figures/data/` use **anonymised placeholder sample IDs** and contain
+**aggregate, sample-level statistics only** (no individual-level genomic or
+clinical data); the QC metric tables disclose the same aggregate values as
+reported in the thesis, so every script runs out of the box — replace them
+with your own tables of identical layout to reproduce the figures.
+
+- **`samtools_stats_extract.py`** — extract one `SN` metric (reads mapped and paired, error rate, mismatches, …) from every `<sample>_<ref>.stats` report into a long-format CSV plus an optional wide CSV (one column per reference) for the box-line plots.
+- **`box_line_plots.py`** — per-metric box plot per reference genome with one paired line per sample, Q25/median/Q75 annotations and pairwise Wilcoxon signed-rank significance stars. Covers bases mapped (CIGAR), mismatches, error rate, properly paired reads, unmapped reads and Het / Hom / all variant counts.
+- **`difference_plots.py`** — per-sample scatter of how much smaller/larger each metric is on T2T-YAO than on T2T-CHM13 / GRCh38 (YAO as baseline), in the original PNG and renewed PDF styles.
+- **`chromosome_density_ideogram.R`** — RIdeogram karyotype per reference genome with the per-1Mb variant-density heat map overlaid and candidate (high-impact) genes marked; SVG → PDF (300 dpi) / TIFF (900 dpi). Karyotype lengths are public assembly properties.
+- **`make_density_windows.py`** — build the per-chromosome 1 Mb window position table (`Chr, Start, End, Count`) for the density tracks; chromosome lengths from a reference FASTA (auto-`.fai`) or a `Chr,End` CSV. Fill `Count` with per-window variant counts and normalise to 0–1 for the ideogram script.
+- **`upsetr_plot.R`** — UpSet plots combining the three reference-specific significant-variant / gene lists per set category. Panel names encode `<CALLER><ANALYSIS><ANNOTATION>`: `G`/`D` = GATK / DeepVariant, `C`/`P` = chi-square / PLINK differential set, `S`/`V` = SnpEff / VEP annotation (e.g. `GCS` = GATK + chi-square + SnpEff, `DPV` = DeepVariant + PLINK + VEP). See the figures README.
+
+See **`figures/README.md`** for data formats, the typical workflow and privacy notes.
 
 #### Typical Workflow
 
@@ -184,6 +208,7 @@ Reserved for the figure-generation scripts used to produce the final WGS figures
 6. **Compare cohorts** — `vcf_info_extraction_snpeff.py` (or the ANNOVAR / VEP variants) for per-variant chi-square / Fisher tests; `count_significant_variants.sh` for a quick tally.
 7. **Associate** — `vcf_to_plink_bed.sh` → `plink_qc.sh` → `plink_assoc.sh` → `extract_significant_variants.sh` → `extract_impact_info.py`.
 8. **Visualise & verify** — `manhattan_qq.R` / `circular_manhattan.R`; `extract_regions_for_igv.sh` for manual IGV inspection of candidate sites.
+9. **Thesis figures** — inside `figures/`: `samtools_stats_extract.py` → `box_line_plots.py` / `difference_plots.py` / `chromosome_density_ideogram.R` / `upsetr_plot.R` (see `figures/README.md`).
 
 #### Technical Notes
 
@@ -195,7 +220,7 @@ Reserved for the figure-generation scripts used to produce the final WGS figures
 - **DeepVariant GPU pinning** — parallel containers without `--gpus '"device=N"'` caused GPU out-of-memory crashes; run one container per GPU, one script per device.
 - **GLnexus temp directories** — concurrent `glnexus_cli` runs collide in `.GLnexus.DB`; give each run its own working directory.
 - **Long-running jobs** — run scripts inside `screen` or under `nohup`; SSH disconnects otherwise kill GATK workflows mid-run.
-- **Version consistency** — GATK was upgraded from 4.0.5.1 to 4.5.0.0 mid-study; earlier gVCFs were re-generated so the whole cohort used one GATK version. Keep caller versions uniform across a cohort.
+- **Caller-version consistency** — keep one caller version across a whole cohort; do not mix GATK versions within a single cohort.
 - **Line-number-based extraction scripts** (`extract_bamstat_info.py`, `extract_vcfstat_counts.py`) assume fixed report layouts; re-verify the offsets against your tool versions before running.
 
 ### 2. scRNA-seq — Single-Cell RNA Sequencing Analysis ★
@@ -223,20 +248,20 @@ R scripts for single-cell RNA sequencing data processing, cell-type annotation, 
 | devtools        | —                | GitHub package installation               |
 | BiocManager     | —                | Bioconductor package management           |
 
-Run `SingcellAnalysis-packages_install.R` once to set up the environment:
+Run `SingleCellAnalysis-packages_install.R` once to set up the environment:
 
 ```r
-source("SingcellAnalysis-packages_install.R")
+source("SingleCellAnalysis-packages_install.R")
 ```
 
 #### Scripts
 
-**`SingcellAnalysis-packages_install.R` — Environment Setup**
+**`SingleCellAnalysis-packages_install.R` — Environment Setup**
 
 Installs and loads all required R packages in one go. Run this first on a fresh machine.
 
 ```r
-source("SingcellAnalysis-packages_install.R")
+source("SingleCellAnalysis-packages_install.R")
 ```
 
 - Installs Seurat, monocle3, clusterProfiler, CellChat, SingleR and their dependencies
@@ -311,7 +336,7 @@ source("pub-data-processing.R")
 
 #### Typical Workflow
 
-1. **Install** — run `SingcellAnalysis-packages_install.R` once.
+1. **Install** — run `SingleCellAnalysis-packages_install.R` once.
 2. **Prepare data** — place your `.rds` files in `data/`.
 3. **Process public data** — run `pub-data-processing.R` to merge, annotate and subset.
 4. **Harmonise idents** — run `Dataset Modification.R` to align cell-type labels.
@@ -376,10 +401,9 @@ Scripts were executed under WSL Ubuntu 22.04 (conda Python 3.12) and Windows 11 
 - **Nomogram maths** — points per locus = coefficient × (100 / max |coefficient|); a total-points target for probability p is `(logit(p) − intercept) × scaling`. The probability axis shares the physical extent of the total-points axis, so the two must stay strictly aligned.
 - **DCA without a DCA library** — net benefit is computed directly from the confusion matrix at each threshold (`NB = TP/N − FP/N × t/(1−t)`) with treat-all / treat-none reference curves; no external package needed.
 - **Sensitivity analyses covered by parameters** — Top-K union screening (`selection_mode = "topk_union"`) and collinearity wash-out before modelling (`remove_collinear = True`, |r| > 0.95 plus zero-variance removal) reproduce the panel-size and all-LASSO-features variants of the study without separate scripts.
-- **Percentage formatting fix** — the working notes printed Youden-cut-off sensitivity/specificity as fractions with a "%" suffix; the released script multiplies by 100 before formatting.
 - **statsmodels optimiser** — BFGS with an lbfgs fallback is used for the nomogram logistic fit; if both struggle on an ill-conditioned design matrix, enable `remove_collinear = True` first.
 
-### 4. LPCAT-Machine Learning — DNN Classification ★
+### 4. LPCAT-Machine-Learning — DNN Classification ★
 
 Deep neural network for binary classification on tabular clinical data. Includes model training, performance evaluation, and comparative ROC analysis.
 
@@ -436,6 +460,10 @@ All datasets share the same 27-column layout (zero-indexed):
 
 The label column (`SCAP`, index 1) contains 0 (negative) or 1 (positive). Missing values are represented by `-1`.
 
+> **Note on the example tables.** The CSVs under `data/` are synthetic / randomly sampled examples, not real individual records. Each of the 20 rows was assembled by independently drawing single values from the full cohort dataset, so the age, sex, BMI, laboratory values and outcome appearing on the same row do **not** belong to the same patient in the real world. They are shipped only to document the column layout and to let the scripts run out of the box.
+>
+> **Note on the cohorts.** The LPCAT clinical cohort analysed here and the WGS cohort analysed in Section 1 are two entirely separate study cohorts with **no overlapping patients**; identical or similarly numbered identifiers in the two datasets do **not** refer to the same individual.
+
 #### Dataset Variants
 
 Each variant keeps the same 27-column structure but replaces one feature column with `-1` across all rows. This tests the model's dependence on each feature without changing the input shape.
@@ -449,7 +477,7 @@ Each variant keeps the same 27-column structure but replaces one feature column 
 | `MachineLearning-nocrp.csv`   | CRP             | 22     | Drop-out CRP              |
 | `MachineLearning-noly.csv`    | LY              | 13     | Drop-out LY%              |
 | `MachineLearning-nolpcat.csv` | LPCAT1          | 10     | Drop-out LPCAT            |
-| `MachineLearning-none.csv`    | NE              | 12     | Drop-out NE%              |
+| `MachineLearning-dropped-NE.csv` | NE           | 12     | Drop-out NE%              |
 
 #### Scripts
 
@@ -518,8 +546,6 @@ Shared helper functions used by the other scripts. Not meant to be run directly.
 ## Notes
 
 - Some raw data files are not included in this repository due to institutional archive requirements, database submission policies, file size limitations, or privacy considerations.
-- The uploaded scripts will be cleaned and annotated to improve readability and reproducibility.
-- Additional documentation will be added as the repository is updated.
 - Server paths, usernames, project identifiers, and sample IDs appearing in the WGS scripts are placeholders for privacy reasons; edit the user-configurable section at the top of each script before running.
 
 ## Citation
@@ -528,4 +554,4 @@ If you use or refer to this repository, please cite the corresponding graduation
 
 ## License
 
-The license for this repository will be determined based on the final scope of the publicly released scripts and any related intellectual property considerations.
+Released under the **Apache License 2.0** (see [`LICENSE`](LICENSE)). Copyright 2026 JianboXue2026. All rights reserved.

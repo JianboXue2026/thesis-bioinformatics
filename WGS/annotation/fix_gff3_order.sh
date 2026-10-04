@@ -21,8 +21,10 @@ awk 'BEGIN {header=1}
      /^#/ {if (header) print > "'$HEADER_FILE'"}
      !/^#/ {header=0; print > "'$BODY_FILE'"}' $GFF3_FILE
 
-# Sort the body by chromosome, then start position
-sort -k1,1 -k4,4n $BODY_FILE > ${BODY_FILE}.sorted
+# Sort the body by chromosome, then start position.
+# -k1,1V gives natural contig order (chr1, chr2, ... chr10, ...) so the file
+# matches the reference sequence order expected by tabix.
+sort -k1,1V -k4,4n $BODY_FILE > ${BODY_FILE}.sorted
 
 # Reassemble header + sorted body
 cat $HEADER_FILE ${BODY_FILE}.sorted > $OUTPUT_FILE

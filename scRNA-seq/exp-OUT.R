@@ -1,6 +1,6 @@
 # ============================== [User: modify only this section] ==============================
-# 1. Specify the Seurat object to analyze (change only this line when switching objects)
-seurat_obj <- filtered_cells_LY6E_self          # <-- Replace with your object name, e.g., PKU.combined.COVID, obj1, obj2, etc.
+# 1. Specify the Seurat object to analyze (assign your object below)
+seurat_obj <- NULL                   # <-- e.g. seurat_obj <- PKU.combined.COVID, filtered_cells_LY6E_self, ...
 obj_name <- "self-LY6E"
 data_dir <- "path/to/your/project/20251204/"
 # 2. Genes of interest (modify as needed)
@@ -22,9 +22,13 @@ library(dplyr)
 library(ggplot2)
 library(reshape2)
 
-# Check whether the Seurat object exists
-if (!exists(deparse(substitute(seurat_obj)))) {
-  stop("Error: Seurat object '", deparse(substitute(seurat_obj)), "' does not exist! Please check the variable name.")
+# Check whether the Seurat object was supplied
+if (is.null(seurat_obj)) {
+  stop("Error: `seurat_obj` is not set. Assign your Seurat object to `seurat_obj` before running, ",
+       "e.g. seurat_obj <- PKU.combined.COVID")
+}
+if (!inherits(seurat_obj, "Seurat")) {
+  stop("Error: `seurat_obj` is not a Seurat object.")
 }
 
 cat("=== Analyzing object:", obj_name, "===\n")

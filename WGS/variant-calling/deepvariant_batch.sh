@@ -73,16 +73,24 @@ tail -n +2 "$SAMPLE_FILE" | while IFS=',' read -r SAMPLE_ID REF_GENOME SEX; do
     mkdir -p "$SAMPLE_LOG_DIR"
 
     HAPLOID_CONTIGS=""
-    if [ "$SEX" -eq 1 ]; then
-        HAPLOID_CONTIGS="--haploid_contigs=chrX,chrY"
-    fi
+    case "${SEX:-}" in
+        1|m|M|male|Male)
+            HAPLOID_CONTIGS="--haploid_contigs=chrX,chrY"
+            ;;
+        0|2|f|F|female|Female|"")
+            :   # female / unknown — no haploid contigs
+            ;;
+        *)
+            echo "WARNING: unrecognised SEX '${SEX}' for ${SAMPLE_ID}; treating as female"
+            ;;
+    esac
 
     echo "Processing sample ${SAMPLE_ID} with reference genome ${REF_GENOME}..."
     docker run --gpus '"device=0"' \
       -v "${BAM_DIR}":"/input" \
       -v "${VCF_OUTPUT_DIR}:/output" \
       -v "${GVCF_OUTPUT_DIR}:/output_gvcf" \
-      -v "${LOG_DIR}:/output/logs" \
+      -v "${LOG_DIR}:/logs" \
       -v "${REF_DIR}:/input/ref" \
       google/deepvariant:"${BIN_VERSION}-gpu" \
       /opt/deepvariant/bin/run_deepvariant \
@@ -92,7 +100,7 @@ tail -n +2 "$SAMPLE_FILE" | while IFS=',' read -r SAMPLE_ID REF_GENOME SEX; do
       --output_vcf=/output/${SAMPLE_ID}-${REF_GENOME}.vcf \
       --output_gvcf=/output_gvcf/${SAMPLE_ID}-${REF_GENOME}.gvcf \
       --num_shards=48 \
-      --logging_dir=/output/logs/${SAMPLE_ID} \
+      --logging_dir=/logs/${SAMPLE_ID} \
       $HAPLOID_CONTIGS \
       --dry_run=false > "${SAMPLE_LOG_DIR}/deepvariant.log" 2>&1
 done

@@ -65,6 +65,9 @@ def prediction_v30(origin_model_path=None, origin_model=None,
     Returns:
         Tuple of (predicted_labels, auc, confusion_matrix).
     """
+    if origin_model is None and origin_model_path is None:
+        raise ValueError("Provide either origin_model_path or origin_model.")
+
     # --- Load or use provided model ---
     if origin_model is None:
         model = tf.keras.models.load_model(origin_model_path)
@@ -118,7 +121,7 @@ def prediction_v30(origin_model_path=None, origin_model=None,
 
 def random_test(random_num, test_img_all, test_label_all):
     """
-    Randomly sample a subset of test data.
+    Randomly sample a subset of test data (without replacement).
 
     Args:
         random_num:      Number of samples to draw.
@@ -126,18 +129,18 @@ def random_test(random_num, test_img_all, test_label_all):
         test_label_all:  Corresponding labels.
 
     Returns:
-        Tuple of (sampled_features, sampled_labels) as numpy arrays.
+        Tuple of (sampled_features, sampled_labels), both numpy arrays.
     """
-    sampled_features = []
-    sampled_labels = []
     total = len(test_img_all)
+    if random_num > total:
+        raise ValueError(
+            f"random_num ({random_num}) exceeds the available samples ({total})")
 
-    for _ in range(random_num):
-        idx = random.randint(0, total - 1)
-        sampled_features.append(test_img_all[idx])
-        sampled_labels.append(test_label_all[idx])
+    idx = random.sample(range(total), random_num)
+    sampled_features = np.array([test_img_all[i] for i in idx])
+    sampled_labels = np.array([test_label_all[i] for i in idx])
 
-    return np.array(sampled_features), sampled_labels
+    return sampled_features, sampled_labels
 
 
 def auto_log_to_csv(model_name, csv_file, data_row):

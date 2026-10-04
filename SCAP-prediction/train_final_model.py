@@ -480,6 +480,9 @@ def train_evaluate_final_panel(timestamped_results_dir):
         "genes": final_genes,
         "intercept": logit_model_sm.params["const"],
         "gene_weights": gene_coefs["Coef"].to_dict(),
+        # Youden-optimal cut-off on the test set — reused as the decision
+        # threshold by predict_new_samples.py
+        "youden_threshold": float(xgb_results["Cut-off"]),
     }
     joblib.dump(model_assets,
                 os.path.join(timestamped_results_dir,

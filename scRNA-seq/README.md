@@ -28,10 +28,10 @@ expression analysis, intercellular communication, and publication-ready visualiz
 
 ### Install
 
-Run `SingcellAnalysis-packages_install.R` once to set up the environment:
+Run `SingleCellAnalysis-packages_install.R` once to set up the environment:
 
 ```r
-source("SingcellAnalysis-packages_install.R")
+source("SingleCellAnalysis-packages_install.R")
 ```
 
 Alternatively, install step-by-step:
@@ -72,7 +72,7 @@ project/
 ├── Box-bar plotting.R                 # Box–bar plots for selected genes across cell types
 ├── Dataset Modification.R             # Harmonise idents, reorder groups & produce dot/UMAP plots
 ├── pub-data-processing.R              # Process public dataset (merge, annotate, subset)
-├── SingcellAnalysis-packages_install.R# One-shot package installation
+├── SingleCellAnalysis-packages_install.R  # One-shot package installation
 └── README.md
 ```
 
@@ -80,12 +80,12 @@ project/
 
 ## Scripts
 
-### 1. `SingcellAnalysis-packages_install.R` — Environment Setup
+### 1. `SingleCellAnalysis-packages_install.R` — Environment Setup
 
 Installs and loads all required R packages in one go. Run this first on a fresh machine.
 
 ```r
-source("SingcellAnalysis-packages_install.R")
+source("SingleCellAnalysis-packages_install.R")
 ```
 
 - Installs Seurat, monocle3, clusterProfiler, CellChat, SingleR and their dependencies
@@ -168,7 +168,7 @@ source("pub-data-processing.R")
 
 ## Typical Workflow
 
-1. **Install** — run `SingcellAnalysis-packages_install.R` once.
+1. **Install** — run `SingleCellAnalysis-packages_install.R` once.
 2. **Prepare data** — place your `.rds` files in `data/`.
 3. **Process public data** — run `pub-data-processing.R` to merge, annotate and subset.
 4. **Harmonise idents** — run `Dataset Modification.R` to align cell-type labels.

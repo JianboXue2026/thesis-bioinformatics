@@ -33,11 +33,13 @@ def extract_ac_an_info(vcf_file):
     ac_an_info = {}
     records = {}
     for record in vcf:
+        if not record.alts:                     # no ALT (e.g. <NON_REF>) — skip
+            continue
         chrom = record.chrom
         pos = record.pos
         ref = record.ref
         alt = record.alts[0]                    # first ALT only
-        ac = record.info.get("AC", [0])[0]      # first AC only
+        ac = (record.info.get("AC") or [0])[0]  # first AC only
         an = record.info.get("AN", 0)
         key = (chrom, pos, ref, alt)
         info_dict = {k: v for k, v in record.info.items()}
@@ -60,6 +62,21 @@ ac_an_info1, records1 = extract_ac_an_info(vcf_file1)
 ac_an_info2, records2 = extract_ac_an_info(vcf_file2)
 
 all_keys = set(ac_an_info1.keys()) | set(ac_an_info2.keys())
+
+
+def contingency_test(table):
+    """Chi-square test, falling back to Fisher's exact test when the smallest
+    EXPECTED cell count is < 5. Returns (chi2, p_value, test_type)."""
+    total = int(table.sum())
+    if total == 0:
+        return "N/A", float("nan"), "Skipped (empty table)"
+    expected = (table.sum(axis=1, keepdims=True)
+                * table.sum(axis=0, keepdims=True) / total)
+    if expected.min() < 5:
+        _, p = fisher_exact(table)
+        return "N/A", p, "Fisher Exact"
+    chi2, p, _, _ = chi2_contingency(table)
+    return chi2, p, "Chi-Square"
 
 
 def process_variant(key):
@@ -88,13 +105,7 @@ def process_variant(key):
     aa_change = aa_change.strip("('").strip("',)")
 
     table = np.array([[ac1, an1 - ac1], [ac2, an2 - ac2]])
-    if np.any(table < 5):
-        oddsratio, p = fisher_exact(table)
-        test_type = "Fisher Exact"
-        chi2 = "N/A"
-    else:
-        chi2, p, _, expected = chi2_contingency(table)
-        test_type = "Chi-Square"
+    chi2, p, test_type = contingency_test(table)
 
     combined_result = [chrom, pos, ref, alt, ac1, an1, ac2, an2, chi2, p,
                        ";".join(ann), info, test_type]

@@ -19,29 +19,29 @@ def extract_lines(file_path):
         with open(file_path, "r", encoding="utf-8") as txt_file:
             lines = txt_file.readlines()
 
-            txt_lines_count = len(lines)
-            start_value_snp = 13    # first line holding a SNP count
-            start_value_indel = 26  # first line holding an INDEL count
-            interval = 26           # line interval between consecutive records
+        txt_lines_count = len(lines)
+        start_value_snp = 13    # first line holding a SNP count
+        start_value_indel = 26  # first line holding an INDEL count
+        interval = 26           # line interval between consecutive records
 
-            lines_remainder = txt_lines_count // interval
-            line_num_list_snp = [start_value_snp + i * interval for i in range(lines_remainder)]
-            line_num_list_indel = [start_value_indel + i * interval for i in range(lines_remainder)]
+        # Enumerate only line numbers that actually exist, instead of using an
+        # integer division that can overshoot the end of the file.
+        line_num_list_snp = list(range(start_value_snp, txt_lines_count + 1, interval))
+        line_num_list_indel = list(range(start_value_indel, txt_lines_count + 1, interval))
 
-            snp_list = []
-            indel_list = []
+        snp_list = [lines[n - 1].strip()[22:29] for n in line_num_list_snp]
+        indel_list = [lines[n - 1].strip()[22:28] for n in line_num_list_indel]
 
-            for line_num_snp in line_num_list_snp:
-                snp_list.append(lines[line_num_snp - 1].strip()[22:29])
-            for line_num_indel in line_num_list_indel:
-                indel_list.append(lines[line_num_indel - 1].strip()[22:28])
-
-            return snp_list, indel_list
+        if not snp_list:
+            print(f"Warning: no SNP records found in '{file_path}' — check the layout.")
+        return snp_list, indel_list
 
     except FileNotFoundError:
         print(f"File '{file_path}' not found.")
+        return [], []
     except Exception as e:
         print(f"Error while extracting information: {e}")
+        return [], []
 
 
 # --- User-configurable section ---------------------------------------------

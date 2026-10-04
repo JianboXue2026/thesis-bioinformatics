@@ -6,13 +6,20 @@ PLINK-significant variant VCFs produced by extract_significant_variants.sh.
 
 Usage:
     python extract_impact_info.py
-    # then enter the VCF path at the prompt (a *_vep_annoed.py variant parses
-    # the CSQ field instead of ANN)
+    # edit VCF_FILE in the user-configurable section below
+    # (a *_vep_annoed.py variant parses the CSQ field instead of ANN)
 """
 
 import pysam
 import csv
 import os
+
+# --- User-configurable section ----------------------------------------------
+# SnpEff-annotated VCF to extract impact information from
+VCF_FILE = "/path/to/snpeff_anno/all-hg38-GATK-fil-snpeff_annoed.vcf.gz"
+# Output directory for the two CSV files
+OUTPUT_DIR = "."
+# -----------------------------------------------------------------------------
 
 
 def extract_impact_info(vcf_file):
@@ -20,6 +27,8 @@ def extract_impact_info(vcf_file):
     high_impact_list = []
     moderate_impact_list = []
     for record in vcf:
+        if not record.alts:          # no ALT (e.g. <NON_REF> records) — skip
+            continue
         chrom = record.chrom
         pos = record.pos
         ref = record.ref
@@ -53,12 +62,12 @@ def save_to_csv(data, output_file):
 
 
 def main():
-    vcf_file = input("Please enter the path to the VCF file: ")
+    vcf_file = VCF_FILE
     base_name = os.path.basename(vcf_file)
     file_name, _ = os.path.splitext(base_name)
 
-    high_impact_csv = f"{file_name}_high_impact.csv"
-    moderate_impact_csv = f"{file_name}_moderate_impact.csv"
+    high_impact_csv = os.path.join(OUTPUT_DIR, f"{file_name}_high_impact.csv")
+    moderate_impact_csv = os.path.join(OUTPUT_DIR, f"{file_name}_moderate_impact.csv")
 
     high_impact_list, moderate_impact_list = extract_impact_info(vcf_file)
     save_to_csv(high_impact_list, high_impact_csv)

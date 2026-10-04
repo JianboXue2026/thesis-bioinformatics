@@ -25,15 +25,25 @@ bcftools view -m2 -M2 -v snps /path/to/filtered_vcf/combined_SCAP_final-CHM13_fi
 input_dir="/path/to/project/filtered_vcf"
 output_dir="/path/to/GATK-PLINK/00.filtered_single"
 
-# bgzip + index all filtered VCFs
+# bgzip any plain .vcf, then index every .vcf.gz
+# (nullglob so a non-matching pattern expands to nothing instead of a literal)
+shopt -s nullglob
 for vcf in "$input_dir"/*.vcf; do
     bgzip -c "$vcf" > "$vcf.gz"
-    tabix -p vcf "$vcf.gz"
+done
+for vcf in "$input_dir"/*.vcf.gz; do
+    tabix -f -p vcf "$vcf"
 done
 
-bcftools merge -Oz -o merged-CHM13.vcf.gz $(ls "$input_dir"/*-CHM13.vcf.gz)
-bcftools merge -Oz -o merged-hg38.vcf.gz  $(ls "$input_dir"/*-hg38.vcf.gz)
-bcftools merge -Oz -o merged-YAO.vcf.gz   $(ls "$input_dir"/*-YAO.vcf.gz)
+# Collect the per-reference VCF lists as arrays (quote-safe: no `ls` parsing)
+chm13_vcfs=("$input_dir"/*-CHM13.vcf.gz)
+hg38_vcfs=("$input_dir"/*-hg38.vcf.gz)
+yao_vcfs=("$input_dir"/*-YAO.vcf.gz)
+shopt -u nullglob
+
+bcftools merge -Oz -o merged-CHM13.vcf.gz "${chm13_vcfs[@]}"
+bcftools merge -Oz -o merged-hg38.vcf.gz  "${hg38_vcfs[@]}"
+bcftools merge -Oz -o merged-YAO.vcf.gz   "${yao_vcfs[@]}"
 
 # keep biallelic SNPs only in the merged files
 bcftools view -m2 -M2 -v snps merged-CHM13.vcf.gz -Oz -o "$output_dir/merged-CHM13-single.vcf.gz"

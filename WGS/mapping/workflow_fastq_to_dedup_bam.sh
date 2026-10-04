@@ -32,7 +32,7 @@ wrs_log_dir="/path/to/logs/Log_for_workflow"
 
 input_1="${cleaned_data_dir}/${old_name}_1.fq.gz"
 input_2="${cleaned_data_dir}/${old_name}_2.fq.gz"
-rg_string="@RG\tID:${new_name}\tSM:${new_name}\tLB:WES\tPL:ILLUMINA"
+rg_string="@RG\tID:${new_name}\tSM:${new_name}\tLB:WGS\tPL:ILLUMINA"
 
 # --- hg38 -------------------------------------------------------------------
 nohup bash -c "

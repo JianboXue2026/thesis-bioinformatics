@@ -7,7 +7,7 @@
 #
 # Prerequisite: gff3ToGenePred binary (UCSC) available on PATH.
 # For CHM13, run fix_gff3_order.sh on the GFF3 first; for YAO, use an
-# AGAT-cleaned GFF3 (see fix_gff3_parent_refs.py for the raw-GFF3 issues).
+# AGAT-cleaned GFF3 (see fix_gff3_parent_refs.py for the raw-GFF3 Parent issues).
 #
 # Usage:
 #   screen -S annovar_db

@@ -50,3 +50,10 @@ rsconnect/
 
 # TensorBoard logs
 logs/
+
+# Generated thesis figures (auto-created by WGS/figures scripts)
+WGS/figures/output/
+
+# Python bytecode caches
+__pycache__/
+*.pyc

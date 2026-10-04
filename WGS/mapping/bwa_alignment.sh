@@ -28,7 +28,7 @@ do
     output_YAO="/path/to/project/BMA/T2T-YAO/${name}-YAO.bam"
     temp_dir_YAO="/path/to/temp/${name}-YAO.temp.bwa"
 
-    RG="@RG\tID:${name}\tSM:${name}\tLB:WES\tPL:ILLUMINA"
+    RG="@RG\tID:${name}\tSM:${name}\tLB:WGS\tPL:ILLUMINA"
 
     bwa mem -t ${core_processing} -R ${RG} /path/to/ref_seq/hg38/hg38.fa ${input_1} ${input_2} | \
         samtools sort -n -m 3G -@ ${core_converting} -T ${temp_dir_hg38} -o ${output_hg38} -  &

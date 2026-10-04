@@ -24,6 +24,8 @@ for chr in "${chromosomes[@]}"; do
 done
 
 # --- GFF3: sort by chromosome then start position ---
-sort -k1,1 -k4,4n hg38.filtered.gff3 -o hg38.filtered.sorted.gff3
+# -k1,1V sorts contigs in natural (version) order (chr1, chr2, ... chr10, ...),
+# which matches the reference sequence order that tabix / downstream tools expect.
+sort -k1,1V -k4,4n hg38.filtered.gff3 -o hg38.filtered.sorted.gff3
 
 # Results: hg38.filtered.fa / hg38.filtered.gff3 / hg38.filtered.sorted.gff3

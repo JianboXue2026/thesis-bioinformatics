@@ -37,23 +37,23 @@ gene_info = {gene: {} for gene in genes_to_find}
 for gff_file, label in zip(gff_files, genome_labels):
     with open(gff_file, "r") as file:
         for line in file:
-            if not line.startswith("#"):
-                parts = line.strip().split("\t")
-                if parts[2] == "gene":
-                    info_fields = parts[8].split(";")
-                    gene_id = None
-                    gene_name = None
-                    for field in info_fields:
-                        if field.startswith("ID="):
-                            gene_id = field.split("=")[1]
-                        if field.startswith("Name="):
-                            gene_name = field.split("=")[1]
-                    if gene_name in genes_to_find:
-                        gene_info[gene_name].update({
-                            f"{label}-chr": parts[0],
-                            f"{label}-start": parts[3],
-                            f"{label}-end": parts[4],
-                        })
+            if line.startswith("#"):
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 9:            # malformed / truncated line — skip
+                continue
+            if parts[2] == "gene":
+                info_fields = parts[8].split(";")
+                gene_name = None
+                for field in info_fields:
+                    if field.startswith("Name="):
+                        gene_name = field.split("=", 1)[1]
+                if gene_name in genes_to_find:
+                    gene_info[gene_name].update({
+                        f"{label}-chr": parts[0],
+                        f"{label}-start": parts[3],
+                        f"{label}-end": parts[4],
+                    })
 
 # Build the wide-format table
 data = []

@@ -24,9 +24,19 @@ LOG_DIR="/path/to/project/combine_YAO/logs/"
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$LOG_DIR"
 
-chromosomes=(chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12
-             chr13 chr14 chr15 chr16 chr17 chr18 chr19 chr20 chr21 chr22
-             chrX chrY chrM)
+# Chromosome list — must match the reference genome actually in use:
+#   CHM13 : chr1-chr22, chrX, chrY      (no chrM)
+#   YAO   : chr1-chr22, chrX, chrY, chrM
+#   hg38  : extract the contig names from the FASTA header first
+# Override on the command line, e.g.:
+#   CHROMS="chr1 chr2 chrX chrY" bash gatk_split_gvcf_by_chrom.sh
+if [ -n "${CHROMS:-}" ]; then
+    read -r -a chromosomes <<< "$CHROMS"
+else
+    chromosomes=(chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12
+                 chr13 chr14 chr15 chr16 chr17 chr18 chr19 chr20 chr21 chr22
+                 chrX chrY chrM)
+fi
 
 process_chromosome() {
     chr=$1

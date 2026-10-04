@@ -29,14 +29,16 @@ def extract_lines(file_path):
             mapped_paired = lines[15 - 1].strip()[28:-52]       # reads mapped and paired
             unmapped_data = lines[16 - 1].strip()[19:]          # reads unmapped
             properly_paired_data = lines[17 - 1].strip()[26:-22]  # reads properly paired
-            percentage_pro_pai_data = lines[45 - 1].strip()[44:]  # properly paired (%)
+            percentage_properly_paired = lines[45 - 1].strip()[44:]  # properly paired (%)
 
             return (total_seq_data, mapped, mapped_paired, unmapped_data,
-                    properly_paired_data, percentage_pro_pai_data)
+                    properly_paired_data, percentage_properly_paired)
     except FileNotFoundError:
         print(f"File '{file_path}' not found.")
+        return None
     except Exception as e:
         print(f"Error while extracting information: {e}")
+        return None
 
 
 def write_to_csv(file_path, column_names, data):
@@ -68,7 +70,10 @@ for name in name_list:
 
 for file_group in file_list:
     for file in file_group:
-        result = list(extract_lines(file))
+        result = extract_lines(file)
+        if result is None:          # file missing / unreadable — skip this entry
+            continue
+        result = list(result)
         # Column 1: sample ID (first 6 chars of the file name)
         result.insert(0, file[len(bamstat_dir):len(bamstat_dir) + 6])
         # Column 2: reference genome tag (e.g. CHM13 / hg38 / YAO)

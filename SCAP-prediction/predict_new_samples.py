@@ -29,9 +29,11 @@ new_data = "/path/to/new_patients.csv"
 output_path = "/path/to/scap_genotype/Inference_Results.csv"
 # Identifier column in the new-patient CSV
 id_col = "ID"
-# Decision threshold for the risk label (Youden cut-off from training;
-# adjust to the value reported by train_final_model.py)
-risk_threshold = 0.5
+# Fallback decision threshold for the risk label. The model assets written by
+# train_final_model.py store the Youden-optimal cut-off ("youden_threshold"),
+# which is applied automatically when present; this value only applies to older
+# asset files that do not contain it.
+risk_threshold_fallback = 0.5
 # ------------------------------------------------------------------------------
 
 
@@ -44,6 +46,11 @@ def run_inference(assets_path, new_patient_csv, output_path,
     lr_model = assets["lr_model"]
     scaler = assets["scaler"]
     required_genes = assets["genes"]
+
+    # Reuse the Youden-optimal cut-off stored with the assets when available
+    if isinstance(assets, dict) and "youden_threshold" in assets:
+        risk_threshold = assets["youden_threshold"]
+    print(f"Using decision threshold: {risk_threshold:.4f}")
 
     # 2. Read the new patient data and validate the feature columns
     df_new = pd.read_csv(new_patient_csv)
@@ -74,4 +81,4 @@ def run_inference(assets_path, new_patient_csv, output_path,
 
 if __name__ == "__main__":
     run_inference(assets_path, new_data, output_path,
-                  risk_threshold=risk_threshold)
+                  risk_threshold=risk_threshold_fallback)

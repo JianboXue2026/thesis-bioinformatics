@@ -13,10 +13,9 @@ Strategy:
   3. drop the orphaned parents from the attribute list (and drop records that
      only exist to reference them), then write a "_modified.gff3" file
 
-Note: after this fix the YAO GFF3 still contained transcript structure errors
-(txStart >= txEnd, overlapping exons). The final solution for YAO was to use an
-externally AGAT-cleaned GFF3 instead — this script is kept as a record of the
-repair attempt and works for the Parent-reference class of errors.
+Note: this script repairs the `Parent`-reference class of errors only — it does
+not fix transcript-structure problems such as txStart >= txEnd or overlapping
+exons (for those, use an AGAT-cleaned GFF3).
 """
 
 # --- User-configurable section ----------------------------------------------

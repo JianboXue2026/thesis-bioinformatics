@@ -29,7 +29,7 @@ pip install tensorflow numpy pandas scikit-learn matplotlib
 ```
 project/
 │
-├── data/                          # Example CSV datasets (full data archived at Peking University)
+├── data/                          # Synthetic example CSV tables (see Notes)
 │   ├── MachineLearning.csv        # All 8 features present
 │   ├── MachineLearning-nopct.csv  # PCT  → replaced with -1
 │   ├── MachineLearning-nowbc.csv  # WBC  → replaced with -1
@@ -37,7 +37,7 @@ project/
 │   ├── MachineLearning-nocrp.csv  # CRP  → replaced with -1
 │   ├── MachineLearning-noly.csv   # LY   → replaced with -1
 │   ├── MachineLearning-nolpcat.csv# LPCAT1 → replaced with -1
-│   └── MachineLearning-none.csv   # NE   → replaced with -1
+│   └── MachineLearning-dropped-NE.csv # NE  → replaced with -1
 │
 ├── models/                        # Saved Keras models (auto-generated)
 │   └── <YYYYMMDD-HHMMSS>/         # One sub-folder per training run
@@ -106,7 +106,7 @@ each individual feature without changing the input shape.
 | `MachineLearning-nocrp.csv`   | CRP             | 22     | Drop-out CRP            |
 | `MachineLearning-noly.csv`    | LY              | 13     | Drop-out LY%            |
 | `MachineLearning-nolpcat.csv` | LPCAT1          | 10     | Drop-out LPCAT          |
-| `MachineLearning-none.csv`    | NE              | 12     | Drop-out NE%            |
+| `MachineLearning-dropped-NE.csv` | NE           | 12     | Drop-out NE%            |
 
 ---
 
@@ -177,3 +177,19 @@ Shared helper functions used by the other scripts. Not meant to be run directly.
   Prediction helpers (`Self_Defining_Function`) prepend a Softmax layer automatically.
 - All random seeds are pinned (`RANDOM_STATE = 1`) for reproducibility.
 - Edit the `FEATURE_COLUMNS` list in each script if your CSV layout differs.
+
+### Privacy & cohort notes
+
+- **The CSVs under `data/` are synthetic / randomly sampled examples, not real
+  individual records.** Each of the 20 rows was assembled by independently
+  drawing single values from the full cohort dataset, so the age, sex, BMI,
+  laboratory values and outcome shown on one row do **not** belong to the same
+  patient in the real world. They are shipped only so the scripts run out of the
+  box and to document the exact column layout. The complete clinical dataset is
+  archived at Peking University and is not distributed.
+- **Two separate cohorts.** The clinical cohort analysed here and the WGS cohort
+  analysed in the `WGS/` module are entirely different study cohorts with **no
+  overlapping patients**. Similar or identically numbered identifiers across the
+  two datasets do **not** refer to the same individual.
+- The saved model under `models/` is provided as a released artefact so that
+  `model_performance.py` and `ROCs.py` can be run without retraining.
