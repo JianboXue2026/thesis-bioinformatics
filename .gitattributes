@@ -1,0 +1,15 @@
+# Normalize line endings
+* text=auto
+
+# Force LF for scripts that run on Linux servers
+*.sh text eol=lf
+*.py text eol=lf
+*.R text eol=lf
+
+# Keep common binary types untouched
+*.bam binary
+*.bai binary
+*.vcf.gz binary
+*.tiff binary
+*.png binary
+*.rds binary

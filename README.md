@@ -24,10 +24,16 @@ The data used in this study are available from the following sources:
 
 ```
 .
-├── WGS/                            # Whole-genome sequencing analysis
+├── WGS/                            # Whole-genome sequencing analysis ★
 │   ├── preprocessing/              # Data preprocessing & quality control
-│   ├── mapping/                    # Mapping & variants calling
-│   └── ...
+│   ├── mapping/                    # Mapping, deduplication & QC statistics
+│   ├── variant-calling/            # Variant calling (GATK & DeepVariant)
+│   ├── annotation/                 # Variant annotation (SnpEff / VEP / ANNOVAR)
+│   ├── variant-comparison/         # Two-cohort variant comparison (chi-square / Fisher)
+│   ├── association/                # PLINK association analysis
+│   ├── visualization/              # Manhattan / QQ / circular plots, IGV inspection
+│   ├── figures/                    # Downstream thesis figure scripts (to be added)
+│   └── README.md
 ├── scRNA-seq/                      # Single-cell RNA sequencing analysis ★
 │   ├── data/                       # Input Seurat objects (.rds) and CSV expression tables
 │   ├── results/                    # Output figures and CSV tables (auto-generated)
@@ -57,14 +63,134 @@ The final structure may be adjusted as additional scripts are organized.
 
 ## Component Details
 
-### 1. WGS — Whole-Genome Sequencing Analysis
+### 1. WGS — Whole-Genome Sequencing Analysis ★
 
-- Data preprocessing & quality control
-- Mapping & variants calling
-- Functional enrichment analysis
-- Visualization and figure generation
+Shell / Python / R scripts for the complete WGS pipeline of the SCAP cohort: starting from the raw data (.fq.gz) provided by the sequencing company, through alignment against **three reference genomes in parallel** (hg38 / GRCh38, T2T-CHM13, T2T-YAO), variant calling with two independent callers (GATK and DeepVariant), functional annotation with three annotators (SnpEff / VEP / ANNOVAR), case–control variant comparison, PLINK association analysis, and publication-ready visualization.
 
-*Detailed documentation forthcoming.*
+All scripts were executed on an offline Linux compute server. Server paths, usernames, project identifiers, and sample IDs in the released scripts have been replaced with placeholders (`/path/to/...`, `<sample_id>`, `CAP001` as an example) — edit the user-configurable section at the top of each script before running.
+
+#### Dependencies
+
+| Tool / Package | Version (used) | Purpose                                          |
+|----------------|----------------|--------------------------------------------------|
+| fastp          | —              | Raw read filtering (parameters set by vendor)    |
+| bwa (bwa-mem)  | —              | Read alignment                                   |
+| samtools       | 1.x            | Sorting, fixmate, markdup, indexing, stats       |
+| GATK           | 4.5.0.0        | HaplotypeCaller / CombineGVCFs / GenotypeGVCFs / VariantFiltration / SelectVariants / MergeVcfs |
+| DeepVariant    | 1.6.1 (GPU Docker) | Alternative variant caller                   |
+| GLnexus        | —              | Joint-calling of DeepVariant GVCFs               |
+| bcftools       | —              | VCF filtering / merging / stats                  |
+| vcftools       | —              | SNP / INDEL separation and counting (early stage)|
+| bgzip / tabix  | —              | Compression and indexing of (g)VCF              |
+| SnpEff         | —              | Variant annotation (ANN field)                   |
+| VEP            | Docker         | Variant annotation (CSQ field)                   |
+| ANNOVAR        | —              | Variant annotation (refGene databases)           |
+| gff3ToGenePred | UCSC binary    | GFF3 → GenePred conversion for ANNOVAR databases |
+| PLINK / PLINK2 | 1.9 / 2.x      | Association analysis and QC                      |
+| bedtools       | —              | Reference sequence extraction                    |
+| Python         | ≥ 3.8          | Runtime for extraction / comparison scripts      |
+| pysam          | —              | VCF parsing                                       |
+| numpy / scipy  | —              | Contingency-table tests                           |
+| pandas         | —              | Table manipulation                                |
+| Biopython      | —              | FASTA parsing (chromosome lengths)                |
+| R (qqman, CMplot) | —          | Manhattan / QQ / circular plots                   |
+| IGV            | 2.17.2         | Manual BAM / VCF inspection                       |
+
+Environment setup on the offline server: conda environments were built in a local Linux VM (`wgs` for pysam/numpy/scipy/pandas; `wgs_plot` for plotting; an R environment for karyoploteR), then packaged and uploaded to the server.
+
+#### Directory Layout & Scripts
+
+**`preprocessing/` — Data Preprocessing & Quality Control**
+
+- **`fastp_clean_data.sh`** — filter vendor-provided paired-end raw reads with fastp; filtering parameters (`-g -q 5 -u 50 -n 15 -l 150`, overlap limits) follow the sequencing company's specification and must stay consistent across all samples. Outputs cleaned `.fq.gz` plus an HTML/JSON QC report per sample.
+- **`filter_hg38_primary_chroms.sh`** — keep only primary chromosomes (chr1–22, chrX, chrY, chrM) from the hg38 FASTA and GFF3; the UCSC hg38 contains hundreds of unplaced/alt contigs that otherwise break downstream per-chromosome steps.
+- **`extract_bamstat_info.py`** — pull key metrics (total reads, mapped, properly paired, …) from `samtools stats` reports of every sample × reference combination into one CSV for mapping-quality comparison. Reads fixed line numbers of the samtools stats layout — verify against your samtools version.
+- **`extract_vcfstat_counts.py`** — extract SNP / INDEL counts from bcftools-stats-style log files into a two-column CSV.
+
+**`mapping/` — Alignment & BAM Processing**
+
+- **`bwa_index.sh`** — build bwa indexes for the three reference genomes (once).
+- **`bwa_alignment.sh`** — align paired-end clean reads with `bwa mem` (RG mandatory — GATK rejects BAMs without it), piped into `samtools sort -n` (name order required by the next step).
+- **`samtools_fixmate.sh`** — fill mate coordinates / ISIZE / flags (prerequisite for markdup). Supports both name-sorted input (direct call) and coordinate-sorted input (re-sort pipe).
+- **`samtools_markdup.sh`** — coordinate-sort then remove PCR duplicates with `samtools markdup`.
+- **`samtools_index_stats.sh`** — index the dedup BAMs and generate `samtools stats` reports consumed by `extract_bamstat_info.py`.
+- **`samtools_add_rg.sh`** — rescue script re-adding RG to BAMs aligned without `-R`.
+- **`workflow_fastq_to_dedup_bam.sh`** — fully automated FASTQ → sort → fixmate → markdup → index → stats workflow, one call per sample, three references in parallel; supports sample-ID standardisation (`old_name` → `new_name`).
+- **`md5sum_bam_archive.sh`** — generate md5 checksums of the pre-variant-calling BAM archive for transfer verification.
+
+**`variant-calling/` — Variant Calling (GATK + DeepVariant)**
+
+- **`gatk_haplotypecaller_gvcf.sh`** — per-sample `HaplotypeCaller -ERC GVCF` + bgzip + tabix, three references in parallel. GVCF mode is used because merging plain VCFs cannot distinguish `./.` (not called) from `0/0` (reference) genotypes.
+- **`gatk_combine_gvcfs.sh`** — hierarchical `CombineGVCFs` merging (samples → lv1 parts → lv2 parts → cohort final); whole-cohort GVCFs are 60–70 GB each, so merging is levelled. Reference genome chosen via indirect variable expansion.
+- **`gatk_gvcf_to_vcf.sh`** — `GenotypeGVCFs` joint genotyping of a combined cohort GVCF into a multi-sample VCF.
+- **`gatk_hardfilter_vcf.sh`** — hard filtering: split SNP / INDEL (SelectVariants) → filter with GATK-recommended thresholds (SNP: QD<2, QUAL<30, SOR>3, FS>60, MQ<40, MQRankSum<-12.5, ReadPosRankSum<-8; INDEL: QD<2, QUAL<30, FS>200, ReadPosRankSum<-20) → keep PASS only → MergeVcfs. Separate single-expression filters (not compound `||`) so sites lacking MQRankSum/ReadPosRankSum annotations are not silently dropped.
+- **`gatk_split_gvcf_by_chrom.sh`** — merge two cohort GVCFs chromosome by chromosome (SelectVariants -L → CombineGVCFs → GenotypeGVCFs per chromosome, all chromosomes in parallel) to avoid memory/storage blow-up; edit the chromosome list per reference (CHM13: no chrM; hg38: extract contig list from FASTA header first).
+- **`gatk_merge_chr_vcfs.sh`** — merge the per-chromosome VCFs into one cohort VCF.
+- **`deepvariant_batch.sh`** — batch DeepVariant 1.6.1 (GPU Docker) calling driven by a sample CSV (`SAMPLE_ID,REF_GENOME,SEX`; male samples get `--haploid_contigs=chrX,chrY`). Pins one container per GPU.
+- **`glnexus_merge_gvcfs.sh`** — joint-call DeepVariant GVCFs with GLnexus (equivalent to CombineGVCFs + GenotypeGVCFs, much faster); supports `DeepVariantWGS` and `DeepVariant_unfiltered` configs; each run needs its own temp directory.
+
+**`annotation/` — Functional Annotation**
+
+- **`snpeff_anno_clean.sh`** — SnpEff annotation of filtered VCFs, then remove WARNING lines SnpEff mixes into the redirected VCF (they corrupt tabix/bcftools parsing), then bgzip + tabix.
+- **`vep_anno.sh`** — VEP annotation via Docker with local FASTA + GFF3 (fully offline). With `--fasta`/`--gff` set, VEP is already offline — do **not** add `--offline` (it triggers a cache check that fails).
+- **`annovar_build_db.sh`** — build custom ANNOVAR refGene databases from reference GFF3 + FASTA (gff3ToGenePred → GenePred; retrieve_seq_from_fasta.pl → transcript FASTA).
+- **`annovar_annotate.sh`** — ANNOVAR `table_annovar.pl` gene-based annotation of filtered VCFs; reference database inferred from the VCF file name.
+- **`fix_gff3_order.sh`** — re-sort a GFF3 by chromosome/start (tabix refuses unsorted GFF3); used for the T2T-CHM13 annotation.
+- **`fix_gff3_parent_refs.py`** — repair invalid `Parent` references in the raw T2T-YAO GFF3 (records kept as documentation of the repair attempt; the final YAO database was built from an AGAT-cleaned GFF3).
+
+**`variant-comparison/` — Case–Control Variant Comparison ★**
+
+- **`vcf_info_extraction_snpeff.py`** — compare two annotated cohort VCFs (NSCP vs SCAP, same reference) variant by variant: build a 2×2 contingency table from AC/AN allele counts (variants unique to one group included, missing group AC=0), run a chi-square test per variant and switch to Fisher's exact test when any observed count in the 2×2 table is < 5, all variants processed in parallel (ThreadPoolExecutor). Outputs a combined CSV, per-chromosome CSVs (primary chromosomes only), HIGH/MODERATE-impact CSVs with gene names parsed from the SnpEff ANN field, and two VCFs of group-unique variants.
+- **`vcf_info_extraction_annovar.py`** — ANNOVAR counterpart; instead of impact tiers it extracts variants with exonic function changes (ExonicFunc.refGene) and amino-acid changes (AAChange.refGene) into dedicated CSVs.
+- **`vcf_info_extraction_vep.py`** — VEP counterpart; parses the CSQ field and additionally reports the MODIFIER impact tier in its own CSV.
+- **`count_significant_variants.sh`** — count rows with P < 0.05 in a comparison output CSV.
+- **`bedtools_extract_refseq.sh`** — extract reference sequences (±200/±500 bp) around candidate variants with `bedtools getfasta`.
+
+**`association/` — PLINK Association Analysis ★**
+
+- **`vcf_to_plink_bed.sh`** — prepare cohort VCFs for PLINK: keep biallelic SNPs only (`bcftools view -m2 -M2 -v snps`), merge NSCP + SCAP cohorts per reference (`bcftools merge`), convert to bed/bim/fam with `plink2 --make-bed` (sex supplied via `--psam`; chrX PAR boundaries via `--split-par`; `--allow-extra-chr` for hg38; `--vcf-half-call m` for DeepVariant VCFs).
+- **`csv_to_psam.py`** — convert a two-column sample/sex CSV into a PLINK2 `.psam` file.
+- **`bim_add_variant_id.py`** — assign each variant a unique deterministic ID (`chr:pos:REF:ALT`) by rewriting the .bim column 2, so association results are unambiguously addressable.
+- **`plink_qc.sh`** — PLINK QC (`--mind 0.05 --geno 0.05 --maf 0.01 --hwe 1e-6`; thresholds relaxed to 0.60 for very-low-frequency variant sets — document the choice per dataset).
+- **`plink_assoc.sh`** — PLINK 1.9 case/control association (`--assoc` / `--logistic`, each with `--adjust` for Bonferroni / Holm / Sidak / FDR_BH / FDR_BY corrected P values), covering GATK- and DeepVariant-derived bed files, QC-filtered and unfiltered.
+- **`extract_significant_variants.sh`** — extract P < 0.05 variants from `.assoc` results → CSV → BED → pull the matching records out of the annotated VCF with `bcftools view -R`.
+- **`extract_impact_info.py`** — extract HIGH / MODERATE impact variants (with gene name and variant type) from a SnpEff-annotated significant-variant VCF into readable CSVs.
+
+**`visualization/` — Visualization & Manual Inspection**
+
+- **`manhattan_qq.R`** — Manhattan and QQ plots from PLINK `.assoc` results with qqman (cleans chromosome codes, removes PAR rows and invalid P values).
+- **`circular_manhattan.R`** — circular Manhattan plot with CMplot (≤ 1,000,000 variants — downsample larger result sets first).
+- **`extract_chromosome_lengths.py`** — chromosome lengths from a reference FASTA into a CSV (input for karyoploteR / RIdeogram chromosome ideograms).
+- **`extract_gene_positions.py`** — look up candidate-gene coordinates across the three reference GFF3s into one wide CSV for cross-reference gene marking.
+- **`extract_regions_for_igv.sh`** — slice BAMs (`samtools view -L`) and the annotated VCF (`bcftools view -R`) around candidate sites, merge per cohort, for manual read-coverage / genotype inspection in IGV.
+
+**`figures/` — Downstream Thesis Figures (to be added)**
+
+Reserved for the figure-generation scripts used to produce the final WGS figures of the thesis (cohort comparison summaries, per-chromosome statistics, combined multi-panel figures). Scripts will be uploaded as the repository is updated.
+
+#### Typical Workflow
+
+1. **Preprocess** — `fastp_clean_data.sh` on vendor raw data; run `filter_hg38_primary_chroms.sh` once for hg38.
+2. **Align & dedup** — `workflow_fastq_to_dedup_bam.sh <old_name> <new_name>` per sample (or the individual mapping scripts); verify mapping stats with `extract_bamstat_info.py`.
+3. **Call variants (GATK)** — `gatk_haplotypecaller_gvcf.sh <sample>` per sample → `gatk_combine_gvcfs.sh` level by level → `gatk_gvcf_to_vcf.sh <cohort> <ref>` → `gatk_hardfilter_vcf.sh <cohort> <ref>` (or the chromosome-split route: `gatk_split_gvcf_by_chrom.sh` + `gatk_merge_chr_vcfs.sh`).
+4. **Call variants (DeepVariant)** — `deepvariant_batch.sh samples.csv` per GPU → `glnexus_merge_gvcfs.sh`.
+5. **Annotate** — `snpeff_anno_clean.sh` / `vep_anno.sh` / `annovar_annotate.sh` (build the SnpEff / ANNOVAR databases first if needed).
+6. **Compare cohorts** — `vcf_info_extraction_snpeff.py` (or the ANNOVAR / VEP variants) for per-variant chi-square / Fisher tests; `count_significant_variants.sh` for a quick tally.
+7. **Associate** — `vcf_to_plink_bed.sh` → `plink_qc.sh` → `plink_assoc.sh` → `extract_significant_variants.sh` → `extract_impact_info.py`.
+8. **Visualise & verify** — `manhattan_qq.R` / `circular_manhattan.R`; `extract_regions_for_igv.sh` for manual IGV inspection of candidate sites.
+
+#### Technical Notes
+
+- **Three references, two callers, three annotators.** Every analysis step was run in parallel for hg38 / T2T-CHM13 / T2T-YAO, and variant calling was performed independently with GATK and DeepVariant; results were cross-validated (see the PLINK section for the parallel result sets).
+- **GVCF over VCF for merging** — plain VCF merging cannot distinguish `./.` from `0/0` at multi-sample level, biasing cohort comparisons; hence the GVCF route.
+- **Hard-filter expressions are single, not compound** — sites without MQRankSum / ReadPosRankSum annotations (non-heterozygous sites) would be dropped by a compound `||` filter.
+- **SnpEff stdout pollution** — redirecting SnpEff output mixes WARNING lines into the VCF, breaking tabix/bcftools; the `awk '!/^WARNING/'` cleanup in `snpeff_anno_clean.sh` is mandatory.
+- **VEP offline mode** — with `--fasta` + `--gff` supplied, adding `--offline` triggers a failing cache check; omit it.
+- **DeepVariant GPU pinning** — parallel containers without `--gpus '"device=N"'` caused GPU out-of-memory crashes; run one container per GPU, one script per device.
+- **GLnexus temp directories** — concurrent `glnexus_cli` runs collide in `.GLnexus.DB`; give each run its own working directory.
+- **Long-running jobs** — run scripts inside `screen` or under `nohup`; SSH disconnects otherwise kill GATK workflows mid-run.
+- **Version consistency** — GATK was upgraded from 4.0.5.1 to 4.5.0.0 mid-study; earlier gVCFs were re-generated so the whole cohort used one GATK version. Keep caller versions uniform across a cohort.
+- **Line-number-based extraction scripts** (`extract_bamstat_info.py`, `extract_vcfstat_counts.py`) assume fixed report layouts; re-verify the offsets against your tool versions before running.
 
 ### 2. scRNA-seq — Single-Cell RNA Sequencing Analysis ★
 
@@ -339,6 +465,7 @@ Shared helper functions used by the other scripts. Not meant to be run directly.
 - Some raw data files are not included in this repository due to institutional archive requirements, database submission policies, file size limitations, or privacy considerations.
 - The uploaded scripts will be cleaned and annotated to improve readability and reproducibility.
 - Additional documentation will be added as the repository is updated.
+- Server paths, usernames, project identifiers, and sample IDs appearing in the WGS scripts are placeholders for privacy reasons; edit the user-configurable section at the top of each script before running.
 
 ## Citation
 
